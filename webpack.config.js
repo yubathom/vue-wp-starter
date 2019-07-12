@@ -1,10 +1,9 @@
-const webpack = require('webpack');
 const path = require('path');
 const package = require('./package.json');
-const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
-const ExtractTextPlugin = require('extract-text-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const VueLoaderPlugin = require('vue-loader/lib/plugin')
 const OptimizeCSSPlugin = require('optimize-css-assets-webpack-plugin');
-const BrowserSyncPlugin = require( 'browser-sync-webpack-plugin' );
+const BrowserSyncPlugin = require('browser-sync-webpack-plugin');
 
 const config = require( './config.json' );
 
@@ -13,32 +12,26 @@ var appName = 'app';
 var entryPoint = {
     frontend: './assets/src/frontend/main.js',
     admin: './assets/src/admin/main.js',
-    vendor: Object.keys(package.dependencies),
-    style: './assets/less/style.less',
+    vendor: Object.keys(package.dependencies)
+    // style: './assets/less/style.less',
 };
 
 var exportPath = path.resolve(__dirname, './assets/js');
 
 // Enviroment flag
 var plugins = [];
-var env = process.env.WEBPACK_ENV;
 
-function isProduction() {
-    return process.env.WEBPACK_ENV === 'production';
-}
+// add vue loader plugin
+const vueLoaderPlugin = new VueLoaderPlugin()
+
+plugins.push(vueLoaderPlugin);
 
 // extract css into its own file
-const extractCss = new ExtractTextPlugin({
+const extractCss = new MiniCssExtractPlugin({
     filename: "../css/[name].css",
 });
 
-plugins.push( extractCss );
-
-// Extract all 3rd party modules into a separate 'vendor' chunk
-plugins.push(new webpack.optimize.CommonsChunkPlugin({
-    name: 'vendor',
-    minChunks: ({ resource }) => /node_modules/.test(resource),
-}));
+plugins.push(extractCss);
 
 plugins.push(new BrowserSyncPlugin( {
     proxy: {
@@ -65,31 +58,27 @@ plugins.push(new OptimizeCSSPlugin({
     }
 }));
 
-// Differ settings based on production flag
-if ( isProduction() ) {
-
-    plugins.push(new UglifyJsPlugin({
-        sourceMap: true,
-    }));
-
-    plugins.push(new webpack.DefinePlugin({
-        'process.env': env
-    }));
-
-    appName = '[name].min.js';
-} else {
-    appName = '[name].js';
-}
+appName = '[name].js'
 
 module.exports = {
+    mode: process.env.WEBPACK_ENV,
     entry: entryPoint,
     output: {
         path: exportPath,
         filename: appName,
-        chunkFilename: 'chunks/[chunkhash].js',
         jsonpFunction: 'pluginWebpack'
     },
-
+    optimization: {
+        splitChunks: {
+            cacheGroups: {
+                vendor: {
+                test: /[\\/]node_modules[\\/]/,
+                name: "vendor",
+                chunks: "all"
+                }
+            }
+        }
+    },
     resolve: {
         alias: {
             'vue$': 'vue/dist/vue.esm.js',
@@ -105,7 +94,7 @@ module.exports = {
 
     plugins,
 
-        module: {
+    module: {
         rules: [
             {
                 test: /\.js$/,
@@ -117,24 +106,38 @@ module.exports = {
             },
             {
                 test: /\.vue$/,
-                loader: 'vue-loader',
-                options: {
-                    extractCSS: true
-                }
+                loader: 'vue-loader'
             },
             {
                 test: /\.less$/,
-                use: extractCss.extract({
-                    use: [{
-                        loader: "css-loader"
-                    }, {
-                        loader: "less-loader"
-                    }]
-                })
+                use: [
+                    {
+                        loader: MiniCssExtractPlugin.loader,
+                        options: {
+                        hmr: process.env.NODE_ENV === 'development',
+                        reloadAll: true
+                        },
+                    },
+                    'vue-style-loader',
+                    'css-loader',
+                    'less-loader',
+                    'css-loader'
+                ]
             },
             {
                 test: /\.css$/,
-                use: [ 'style-loader', 'css-loader' ]
+            use: [
+                    {
+                        loader: 'vue-style-loader'
+                    },
+                    {
+                        loader: 'css-loader',
+                        options: {
+                        modules: true,
+                        localIdentName: '[local]_[hash:base64:8]'
+                        }
+                    }
+                ]
             }
         ]
     },
